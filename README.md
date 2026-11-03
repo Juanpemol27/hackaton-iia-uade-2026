@@ -29,7 +29,7 @@ Hackatón IIA · UADE · 3.4.257
 **Variables que usa y por qué.**
 
 - **Usa: horas de mojado foliar.** El hongo necesita la hoja mojada para infectar. En los 14 casos de entrenamiento, todos los lotes con pérdidas tuvieron 28 h o más de mojado, y todos los lotes sin pérdidas salvo uno (caso 11) tuvieron 19 h o menos. Es la única variable que separa los casos.
-- **Descarta: temperatura media.** En entrenamiento hay lotes con y sin pérdidas en todo el rango (de 15 °C a 29 °C mezclados). No separa los casos.
+- **Descarta: temperatura media.** En entrenamiento hay lotes con y sin pérdidas en todo el rango (de 15,4 °C a 28,6 °C, mezclados). No separa los casos. **También la probamos combinada con el mojado.** Entre los lotes de entrenamiento con 20 h o más, la mejor combinación es "mojado ≥ 20 h y temperatura ≥ 22,7 °C". Esa regla saca el falso positivo del caso 11 (22,5 °C), pero deja afuera al caso 5 (15,4 °C, con pérdidas): cambia el error barato por el caro. Solo combinando las tres variables se llega a 14/14 (bitácora, fila 10), y eso es ajustarse a un solo caso.
 - **Descarta: severidad en lotes vecinos.** En entrenamiento no ayudó: el caso 6 tuvo pérdidas con 3% en los vecinos y el caso 7 no tuvo pérdidas con 22%. Agregarla como condición (vecinos ≥ 5%) sacaba el falso positivo del caso 11 pero creaba un falso negativo en el caso 6 (ver sección 4).
 - **Dónde va el umbral.** Entre 19 h (el lote sin pérdidas con más mojado, salvo el caso 11) y 28 h (el lote con pérdidas con menos mojado) no hay ningún caso de entrenamiento. Pusimos el corte en el borde inferior de ese hueco, **20 h**, porque el error caro es no aplicar: ante un mojado intermedio, preferimos aplicar.
 
@@ -90,17 +90,24 @@ No es memorización: es una sola regla con un solo umbral. Es generalización li
 
 **El falso negativo es peor.** Según la ficha, el falso negativo es no aplicar y que haya epidemia, con pérdidas de rendimiento de hasta un tercio. El falso positivo es aplicar sin necesidad: se pierde el costo del producto y hay impacto ambiental. Perder un tercio de la cosecha cuesta mucho más que una aplicación.
 
-**Qué cambiamos por él.** Partimos de la versión que maximizaba la exactitud en entrenamiento y la cambiamos:
+**Qué cambiamos por él.** Partimos de una primera versión con 13/14 en entrenamiento y la cambiamos:
 
 | Versión | Regla | Entrenamiento | Error en entrenamiento |
 |---|---|---|---|
-| V1 (máxima exactitud) | SÍ si mojado ≥ 28 h **y** vecinos ≥ 5% | 13/14 | 1 FN (caso 6) |
+| V1 (primera versión) | SÍ si mojado ≥ 28 h **y** vecinos ≥ 5% | 13/14 | 1 FN (caso 6) |
 | **V2 (final)** | SÍ si mojado ≥ 20 h | 13/14 | 1 FP (caso 11) |
 
 - **Sacamos la condición de vecinos ≥ 5%.** Eliminaba el falso positivo del caso 11, pero a cambio creaba un falso negativo en el caso 6. Con la misma exactitud, cambiamos el error caro por el barato. La exactitud sola no distinguía las dos versiones: el costo sí.
 - **Bajamos el umbral de 28 h a 20 h,** al borde inferior del hueco sin datos, para que un lote con mojado intermedio se trate.
 
 En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mirar la prueba. En prueba, las dos versiones tienen la misma sensibilidad (2/3, las dos fallan el caso 18). V1 no habría tenido el falso positivo del caso 17. No volvimos a V1 por ese resultado, porque elegir la versión según la prueba es usar la prueba para construir.
+
+**Cuántos falsos positivos aceptamos por cada falso negativo evitado.** La ficha no da el costo por hectárea de una aplicación ni de una epidemia, así que no podemos fijar una tasa exacta. Lo que decidimos, con números de entrenamiento:
+
+- **De V1 a V2 aceptamos 1 FP para evitar 1 FN.** Es una tasa de 1 a 1, y la aceptamos porque la ficha deja claro que el FN es mucho más caro.
+- **No aceptamos "aplicar siempre".** En entrenamiento suma 6 FP más que nuestra regla (7 contra 1) sin evitar ningún FN, porque ya teníamos 0. Ahí es donde entra el costo del producto y del ambiente: es lo que nos hace rechazar aplicar en todos los lotes.
+- **Regla de decisión:** aceptamos un falso positivo más solo si evita un falso negativo en entrenamiento.
+- **El límite, en prueba:** pasar de nuestra regla a "aplicar siempre" habría evitado 1 FN (caso 18) a cambio de 2 FP (casos 15 y 20). Si una epidemia cuesta más que dos aplicaciones, convendría aplicar en más lotes. Esa cuenta se tiene que hacer con costos reales antes de usar el sistema en el campo.
 
 ## 5. ¿Comparado contra qué?
 
@@ -115,6 +122,7 @@ En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mi
 - La regla le gana a las dos líneas base en exactitud: 92,9% contra 50% en entrenamiento y 66,7% contra 50% en prueba.
 - En prueba la ventaja es de un solo caso de seis. Es una mejora real pero con poca evidencia.
 - "Aplicar siempre" tiene 100% de sensibilidad. Si solo miráramos la sensibilidad, ganaría el sistema trivial, que fumiga todos los lotes. Por eso la sensibilidad se lee junto con la especificidad (0% en la línea base).
+- **En prueba, "aplicar siempre" nos gana en sensibilidad** (100% contra 66,7%). Con nuestra regla se escapó 1 lote con pérdidas (caso 18) y a cambio se evitaron 2 aplicaciones innecesarias (casos 15 y 20). Si ese intercambio conviene depende del costo por hectárea de la aplicación y de la pérdida, que la ficha no da.
 - Las clases están balanceadas (7 y 7, 3 y 3), así que el 50% de la línea base es el piso real.
 
 | Checklist (Clase 6) | Respuesta |
@@ -135,7 +143,11 @@ En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mi
 
 **Riesgo del otro lado.** Con el umbral bajo (20 h), en una campaña muy lluviosa el sistema puede recomendar aplicar en muchos lotes. Eso implica más costo, más impacto ambiental y aplicaciones repetidas que favorecen que el hongo se haga resistente al fungicida.
 
-**Mitigación.** La salida es una recomendación para el asesor agronómico, que decide. Ante severidad alta en lotes vecinos, el asesor debería revisar el lote aunque el sistema diga NO. Para incorporar la severidad vecina a la regla, harían falta más casos de entrenamiento.
+**Mitigación.** La salida es una recomendación para el asesor agronómico, que decide.
+
+- **Si el sistema dice NO con severidad alta en lotes vecinos:** el asesor debería revisar el lote igual.
+- **Si en una campaña lluviosa el sistema pide aplicar en muchos lotes:** antes de pulverizar, el asesor revisa en el campo los lotes marcados SÍ, mirando las hojas en busca de pústulas de roya. Empieza por los que tienen entre 20 y 28 h de mojado, que es la zona donde el entrenamiento no tenía casos y la regla es menos confiable. Cada lote revisado se anota con su resultado (hubo o no pérdidas) para recalibrar el umbral con datos propios.
+- **Para incorporar la severidad vecina a la regla:** harían falta más casos de entrenamiento.
 
 ## 7. Bitácora
 
@@ -149,11 +161,13 @@ En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mi
 | 4 | Dónde poner el umbral dentro del hueco de 19 a 28 h sin datos. | 20 h, en el borde inferior, porque ante la duda preferimos aplicar. | El punto medio (24 h): es neutral entre los dos errores, y en nuestro problema no lo son. |
 | 5 | Que calculara las matrices y las métricas de entrenamiento y de prueba, y las líneas base. | Las matrices y métricas, después de verificarlas: Facundo las recalculó por separado con su IA desde `datos/T13.csv`, sin ver nuestros números, y coincidieron caso por caso (mismos errores: 11 en entrenamiento, 17 y 18 en prueba). | Nada. |
 | 6 | Después de medir la prueba, que analizara los errores. La IA marcó que una regla extra (vecinos ≥ 20% → SÍ) habría atrapado el caso 18. | Dejar el caso 18 como riesgo documentado (sección 6). | Agregar esa regla: sería construir con los casos de prueba. Además, en entrenamiento esa regla sumaba un falso positivo (caso 7) sin acertar ningún caso nuevo. |
-| 7 | Ya medida la regla, le pedimos probar la pista más avanzada: una neurona (perceptrón) con las 3 variables, entrenada con los casos 1 a 14. Dio 14/14 en entrenamiento y 5/6 en prueba. | Quedarnos con la regla y documentar la prueba de la neurona acá. | Cambiar a la neurona. Ya habíamos visto la prueba de la regla, y cambiar de sistema porque la neurona saca mejor en prueba sería elegir con los casos de prueba. Además, su 14/14 sale de darle peso a la temperatura para separar un solo caso (el 11) que contradice a otro casi igual (el 6): es ajuste a un caso, no un patrón. |
+| 7 | Ya medida la regla, le pedimos probar la pista más avanzada: una neurona (perceptrón) con las 3 variables, entrenada con los casos 1 a 14. Dio 14/14 en entrenamiento y 5/6 en prueba. Pesos aprendidos (regla del perceptrón, pesos iniciales en 0, tasa 1, entradas divididas por 10, 196 pasadas): **SÍ si 0,58 · mojado (h) + 1,401 · temperatura (°C) + 1,85 · vecinos (%) − 79 ≥ 0**. | Quedarnos con la regla y documentar la prueba de la neurona acá. | Cambiar a la neurona. Ya habíamos visto la prueba de la regla, y cambiar de sistema porque la neurona saca mejor en prueba sería elegir con los casos de prueba. Además, su 14/14 sale de darle peso a la temperatura para separar un solo caso (el 11) que contradice a otro casi igual (el 6): con esos pesos el caso 6 da +0,10 y el 11 da −0,06. Es un margen mínimo, un ajuste a un caso y no un patrón. |
 | 8 | Que redactara el README con nuestras decisiones. | La estructura y la redacción, revisada por nosotros. | Cualquier frase dirigida al evaluador: el README solo documenta el trabajo. |
+| 9 | Facundo le pidió a su IA 10 preguntas de defensa sobre el README, con respuestas para corregir. | 9 de las 10 respuestas. | La respuesta 6: citaba una versión con temperatura que no es la nuestra (nuestra V1 es mojado ≥ 28 h y vecinos ≥ 5%). Se había escrito sobre otro borrador. |
+| 10 | Facundo le pidió a su IA revisar el README contra el CSV. | Tres correcciones. V1 no era "de máxima exactitud": la regla "mojado ≥ 28 y (vecinos ≥ 5% o temperatura ≥ 25 °C)" saca 14/14, así que la renombramos "primera versión". Agregamos en la sección 5 que en prueba "aplicar siempre" nos gana en sensibilidad. Corregimos el rango de temperatura (15,4 a 28,6 °C). | No usar esa regla de 14/14. Con dos condiciones encadenadas para acertar un solo caso (el 11), es el mismo ajuste a un caso que la neurona. |
 
 **Corridas contra el evaluador**
 
 | Corrida | Nota | Agujero que encontró | Qué cambiamos |
 |---|---|---|---|
-| 1 | (completar) | (completar) | (completar) |
+| 1 | 9,5/10 (A 2 · B 1,5 · C 3 · D 1 · E 1 · F 0,5 · G 0,5). Sin topes. Habilitados para la mesa. | **Agujero principal:** decíamos que el objetivo es el menor costo total, pero no explicábamos cómo entra el costo del producto y del ambiente ni cuántos FP aceptamos por cada FN evitado. **Otros:** si probamos la temperatura combinada con el mojado o solo sola, y cómo verificamos la recomendación en una campaña lluviosa. Además, la fila de corridas estaba sin completar. | Sección 4: agregamos la tasa FP por FN (1 a 1 de V1 a V2; rechazo de "aplicar siempre", que suma 6 FP sin evitar FN) y el límite de esa decisión en prueba. Sección 2: mostramos la temperatura combinada con el mojado ("mojado ≥ 20 y temperatura ≥ 22,7 °C" saca el FP del caso 11 pero crea el FN del caso 5). Sección 6: verificación en campo antes de pulverizar en campañas lluviosas. Completamos esta fila. También entraron las correcciones de la fila 10 de la bitácora. |
