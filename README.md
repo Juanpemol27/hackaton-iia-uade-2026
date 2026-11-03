@@ -88,7 +88,12 @@ No es memorización: es una sola regla con un solo umbral. Es generalización li
 
 ## 4. El error más caro
 
-**El falso negativo es peor.** Según la ficha, el falso negativo es no aplicar y que haya epidemia, con pérdidas de rendimiento de hasta un tercio. El falso positivo es aplicar sin necesidad: se pierde el costo del producto y hay impacto ambiental. Perder un tercio de la cosecha cuesta mucho más que una aplicación.
+**El falso negativo es peor.** La ficha T13 (`problematicas/tarde.md`, apartado "Si el sistema se equivoca") dice textualmente:
+
+> - Falso positivo (dice SÍ y era NO): Aplicar sin necesidad: costo del producto e impacto ambiental.
+> - Falso negativo (dice NO y era SÍ): No aplicar y que haya epidemia: pérdidas de rendimiento de hasta un tercio.
+
+Perder hasta un tercio de la cosecha cuesta mucho más que una aplicación. Aun sin mirar la cifra, la comparación da lo mismo: el FN es una epidemia en el lote (cosecha perdida) y el FP es el costo de una aplicación más su impacto ambiental.
 
 **Qué cambiamos por él.** Partimos de una primera versión con 13/14 en entrenamiento y la cambiamos:
 
@@ -107,6 +112,10 @@ En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mi
 - **De V1 a V2 aceptamos 1 FP para evitar 1 FN.** Es una tasa de 1 a 1, y la aceptamos porque la ficha deja claro que el FN es mucho más caro.
 - **No aceptamos "aplicar siempre".** En entrenamiento suma 6 FP más que nuestra regla (7 contra 1) sin evitar ningún FN, porque ya teníamos 0. Ahí es donde entra el costo del producto y del ambiente: es lo que nos hace rechazar aplicar en todos los lotes.
 - **Regla de decisión:** aceptamos un falso positivo más solo si evita un falso negativo en entrenamiento.
+- **Dónde entra el costo del producto en la regla: en el umbral.** El costo total en entrenamiento es C_FN × FN + C_FP × FP, donde C_FP es el costo del producto y el ambiente por aplicación de más. Con un umbral entre 19 y 28 h queda FN = 0 y FP = 1, que es el mínimo para cualquier relación de costos:
+  - **Si bajamos el umbral a 19 h,** se suma un FP (caso 10, 19 h): se paga una aplicación más (C_FP) sin evitar ningún FN.
+  - **Si lo subimos por encima de 28 h,** se suma un FN (caso 14, 28 h).
+  - **El costo del producto es lo que frena el umbral en 20 h y no más abajo.** Dentro del hueco entre 19 y 28 h, como C_FN es mayor que C_FP, elegimos el borde que aplica.
 - **El límite, en prueba:** pasar de nuestra regla a "aplicar siempre" habría evitado 1 FN (caso 18) a cambio de 2 FP (casos 15 y 20). Si una epidemia cuesta más que dos aplicaciones, convendría aplicar en más lotes. Esa cuenta se tiene que hacer con costos reales antes de usar el sistema en el campo.
 
 ## 5. ¿Comparado contra qué?
@@ -171,3 +180,4 @@ En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mi
 | Corrida | Nota | Agujero que encontró | Qué cambiamos |
 |---|---|---|---|
 | 1 | 9,5/10 (A 2 · B 1,5 · C 3 · D 1 · E 1 · F 0,5 · G 0,5). Sin topes. Habilitados para la mesa. | **Agujero principal:** decíamos que el objetivo es el menor costo total, pero no explicábamos cómo entra el costo del producto y del ambiente ni cuántos FP aceptamos por cada FN evitado. **Otros:** si probamos la temperatura combinada con el mojado o solo sola, y cómo verificamos la recomendación en una campaña lluviosa. Además, la fila de corridas estaba sin completar. | Sección 4: agregamos la tasa FP por FN (1 a 1 de V1 a V2; rechazo de "aplicar siempre", que suma 6 FP sin evitar FN) y el límite de esa decisión en prueba. Sección 2: mostramos la temperatura combinada con el mojado ("mojado ≥ 20 y temperatura ≥ 22,7 °C" saca el FP del caso 11 pero crea el FN del caso 5). Sección 6: verificación en campo antes de pulverizar en campañas lluviosas. Completamos esta fila. También entraron las correcciones de la fila 10 de la bitácora. |
+| 2 | 9,5/10 (A 2 · B 1,5 · C 3 · D 0,5 · E 1 · F 0,5 · G 1). Sin topes. Habilitados para la mesa. | **Agujero principal:** según el evaluador, la cifra "hasta un tercio" no aparece en la ficha. **Otro:** dónde entra el costo del producto en la regla, y no solo en el texto. | Verificamos la ficha: la cifra sí está, en el falso negativo del apartado "Si el sistema se equivoca" de T13 (`problematicas/tarde.md`, línea 534), igual en el repositorio original de la cátedra. La citamos textual en la sección 4 y aclaramos que la conclusión no depende de la cifra. En la sección 4 agregamos la cuenta de costo total en entrenamiento: el costo del producto es lo que frena el umbral en 20 h, porque bajarlo a 19 h suma una aplicación (caso 10) sin evitar ningún FN. |
