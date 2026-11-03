@@ -1,3 +1,129 @@
+# T13 · ¿Aplicamos fungicida contra la roya de la soja?
+
+Hackatón IIA · UADE · 3.4.257
+
+**Integrantes:** Juan Pedro Moldes · Facundo Iturbe · **IA declarada:** Claude · **Pista:** Reglas · **Publicación en LinkedIn:** (se agrega el link al publicar)
+
+## 1. Formulación y PEAS
+
+**La pregunta.** Para cada lote de soja en una semana, ¿la roya asiática causa pérdidas si no se aplica fungicida? **SÍ** significa: la roya causa pérdidas si no se aplica, entonces hay que aplicar. **NO** significa: no hace falta aplicar esa semana.
+
+**Cuándo se decide.** Al cierre de cada semana de monitoreo, con los datos ya registrados de esa semana (horas de mojado foliar del sensor o la estación, temperatura media, y severidad relevada en lotes vecinos). El sistema no usa nada que se conozca después de decidir.
+
+| PEAS | Su sistema |
+|---|---|
+| Medida de rendimiento | Que los lotes que iban a tener pérdidas por roya se traten a tiempo (sensibilidad), sin aplicar en lotes que no lo necesitaban (especificidad). De fondo: rendimiento protegido contra costo de producto e impacto ambiental. |
+| Entorno | Lotes de soja durante la campaña, semana a semana. Clima (lluvia, rocío, temperatura) y presión de esporas desde lotes vecinos. Parcialmente observable, estocástico y secuencial. |
+| Actuadores | La recomendación al asesor agronómico: "aplicar fungicida en este lote" o "no aplicar esta semana" (orden de pulverización). |
+| Sensores | Sensor de mojado foliar o estación meteorológica (horas de mojado, temperatura media) y monitoreo de lotes vecinos (% de hojas afectadas). |
+
+**Objetivo y métrica.** El **objetivo** es proteger el rendimiento de la soja frente a la roya aplicando fungicida solo cuando hace falta: el menor costo total entre pérdidas de cosecha, producto y daño ambiental. La **métrica principal** es la **sensibilidad** (de los lotes que iban a tener pérdidas, cuántos detectamos), porque el falso negativo es el error caro. La controlamos con la **especificidad**. **No son lo mismo:** se puede lograr 100% de sensibilidad aplicando fungicida en todos los lotes, y eso no cumple el objetivo porque gasta producto y daña el ambiente en todos los lotes sanos. Por eso la sensibilidad sola no alcanza y siempre la miramos junto con la especificidad y contra la línea base.
+
+## 2. El sistema
+
+**Cómo decide.** Sistema de reglas si‑entonces:
+
+- **R1.** Si las **horas de mojado foliar en la semana son 20 o más** → **SÍ** (aplicar fungicida).
+- **R2.** Si no → **NO** (no aplicar esta semana).
+
+**Variables que usa y por qué.**
+
+- **Usa: horas de mojado foliar.** El hongo necesita la hoja mojada para infectar. En los 14 casos de entrenamiento, todos los lotes con pérdidas tuvieron 28 h o más de mojado, y todos los lotes sin pérdidas salvo uno (caso 11) tuvieron 19 h o menos. Es la única variable que separa los casos.
+- **Descarta: temperatura media.** En entrenamiento hay lotes con y sin pérdidas en todo el rango (de 15 °C a 29 °C mezclados). No separa los casos.
+- **Descarta: severidad en lotes vecinos.** En entrenamiento no ayudó: el caso 6 tuvo pérdidas con 3% en los vecinos y el caso 7 no tuvo pérdidas con 22%. Agregarla como condición (vecinos ≥ 5%) sacaba el falso positivo del caso 11 pero creaba un falso negativo en el caso 6 (ver sección 4).
+- **Dónde va el umbral.** Entre 19 h (el lote sin pérdidas con más mojado, salvo el caso 11) y 28 h (el lote con pérdidas con menos mojado) no hay ningún caso de entrenamiento. Pusimos el corte en el borde inferior de ese hueco, **20 h**, porque el error caro es no aplicar: ante un mojado intermedio, preferimos aplicar.
+
+Las tres variables se conocen al momento de decidir (se registran durante la semana que se evalúa).
+
+**Cómo se corre en vivo.**
+
+1. Del caso nuevo, mirar solo la columna **Horas de mojado foliar (en la semana)**.
+2. Si es **20 o más** → respuesta **SÍ** (aplicar).
+3. Si es **menos de 20** → respuesta **NO** (no aplicar).
+
+Se puede hacer a mano. En una planilla, con las horas de mojado en la celda C2: `=SI(C2>=20;"SÍ";"NO")`.
+
+**Dos casos de ejemplo.**
+
+| Caso inventado | Valores | Salida del sistema |
+|---|---|---|
+| A | Mojado 45 h · Temperatura 24 °C · Vecinos 10% | SÍ (45 ≥ 20) |
+| B | Mojado 12 h · Temperatura 22 °C · Vecinos 15% | NO (12 < 20) |
+
+## 3. Medición
+
+Reglas aplicadas a los datos de la ficha (`datos/T13.csv`), sin cambiar la división: casos 1 a 14 para construir, casos 15 a 20 solo para medir.
+
+**Entrenamiento (casos 1–14)**
+
+| | Predice SÍ | Predice NO |
+|---|---|---|
+| Real SÍ | VP = 7 | FN = 0 |
+| Real NO | FP = 1 | VN = 6 |
+
+Total: 7 + 0 + 1 + 6 = 14 casos. Reales SÍ = 7 (casos 1, 3, 5, 6, 8, 13, 14). Reales NO = 7. El único error es el caso 11 (69 h de mojado, sin pérdidas): falso positivo.
+
+**Prueba (casos 15–20)**
+
+| | Predice SÍ | Predice NO |
+|---|---|---|
+| Real SÍ | VP = 2 | FN = 1 |
+| Real NO | FP = 1 | VN = 2 |
+
+Total: 2 + 1 + 1 + 2 = 6 casos. Reales SÍ = 3 (casos 16, 18, 19). Reales NO = 3 (casos 15, 17, 20). Errores: caso 17 (21 h, sin pérdidas) falso positivo; caso 18 (8 h, con pérdidas) falso negativo.
+
+| Métrica | Entrenamiento | Prueba |
+|---|---|---|
+| Exactitud | 13/14 = 92,9% | 4/6 = 66,7% |
+| Precisión | 7/8 = 87,5% | 2/3 = 66,7% |
+| Sensibilidad | 7/7 = 100% | 2/3 = 66,7% |
+| Especificidad | 6/7 = 85,7% | 2/3 = 66,7% |
+
+**Entrenamiento contra prueba.** Sí hay diferencia: la exactitud baja de 92,9% a 66,7% y la sensibilidad de 100% a 66,7%. Hay dos razones:
+
+- **Pocos casos.** Con 6 casos de prueba, cada error mueve 16,7 puntos. La diferencia son dos casos, así que los números de prueba tienen mucha incertidumbre.
+- **Patrones que el entrenamiento no tenía.** El caso 17 (21 h) cae justo en la zona de 20 a 27 h donde no había ningún caso de entrenamiento. Ahí el umbral era una apuesta, y la decisión de aplicar ante la duda nos dio un falso positivo. El caso 18 (8 h de mojado pero 28% de severidad en los vecinos) muestra un patrón que no aparece en entrenamiento: mucha presión de esporas con poco mojado. Nuestra regla no lo puede ver.
+
+No es memorización: es una sola regla con un solo umbral. Es generalización limitada por tener 14 casos. **No cambiamos la regla después de ver la prueba**, porque eso sería usar los casos de prueba para construir y la medición dejaría de valer.
+
+## 4. El error más caro
+
+**El falso negativo es peor.** Según la ficha, el falso negativo es no aplicar y que haya epidemia, con pérdidas de rendimiento de hasta un tercio. El falso positivo es aplicar sin necesidad: se pierde el costo del producto y hay impacto ambiental. Perder un tercio de la cosecha cuesta mucho más que una aplicación.
+
+**Qué cambiamos por él.** Partimos de la versión que maximizaba la exactitud en entrenamiento y la cambiamos:
+
+| Versión | Regla | Entrenamiento | Error en entrenamiento |
+|---|---|---|---|
+| V1 (máxima exactitud) | SÍ si mojado ≥ 28 h **y** vecinos ≥ 5% | 13/14 | 1 FN (caso 6) |
+| **V2 (final)** | SÍ si mojado ≥ 20 h | 13/14 | 1 FP (caso 11) |
+
+- **Sacamos la condición de vecinos ≥ 5%.** Eliminaba el falso positivo del caso 11, pero a cambio creaba un falso negativo en el caso 6. Con la misma exactitud, cambiamos el error caro por el barato. La exactitud sola no distinguía las dos versiones: el costo sí.
+- **Bajamos el umbral de 28 h a 20 h,** al borde inferior del hueco sin datos, para que un lote con mojado intermedio se trate.
+
+En entrenamiento, los falsos negativos pasaron de 1 a 0. Elegimos V2 antes de mirar la prueba. En prueba, las dos versiones tienen la misma sensibilidad (2/3, las dos fallan el caso 18). V1 no habría tenido el falso positivo del caso 17. No volvimos a V1 por ese resultado, porque elegir la versión según la prueba es usar la prueba para construir.
+
+## 5. ¿Comparado contra qué?
+
+**Línea base trivial.**
+
+| Sistema | Exactitud entrenamiento | Exactitud prueba | Sensibilidad prueba | Especificidad prueba |
+|---|---|---|---|---|
+| Siempre NO (nunca aplicar) | 7/14 = 50% | 3/6 = 50% | 0% | 100% |
+| Siempre SÍ (aplicar siempre) | 7/14 = 50% | 3/6 = 50% | 100% | 0% |
+| **Nuestra regla** | 13/14 = 92,9% | 4/6 = 66,7% | 66,7% | 66,7% |
+
+- La regla le gana a las dos líneas base en exactitud: 92,9% contra 50% en entrenamiento y 66,7% contra 50% en prueba.
+- En prueba la ventaja es de un solo caso de seis. Es una mejora real pero con poca evidencia.
+- "Aplicar siempre" tiene 100% de sensibilidad. Si solo miráramos la sensibilidad, ganaría el sistema trivial, que fumiga todos los lotes. Por eso la sensibilidad se lee junto con la especificidad (0% en la línea base).
+- Las clases están balanceadas (7 y 7, 3 y 3), así que el 50% de la línea base es el piso real.
+
+| Checklist (Clase 6) | Respuesta |
+|---|---|
+| ¿Qué datos? | Los 20 casos inventados de la ficha T13: 14 de entrenamiento y 6 de prueba, con la división fija. Son pocos, no son datos reales de campo y no sabemos de qué campaña o región representan. |
+| ¿Qué métrica? | Sensibilidad como principal (el falso negativo es el error caro), junto con especificidad y precisión. La exactitud la reportamos comparada contra la línea base trivial. |
+| ¿Comparado contra qué? | Contra las dos líneas base triviales: "siempre SÍ" y "siempre NO" (50% de exactitud cada una). |
+| ¿Quién lo midió? | Nosotros mismos, el mismo grupo que construyó la regla, sobre los 6 casos de prueba que no usamos para construir. No hay una medición independiente con datos nuevos de campo; la mesa lo prueba con casos propios de la cátedra. |
+
 ## 6. Riesgo: el camino completo
 
 **Riesgo principal: no aplicar cuando hay mucha presión de esporas.**
